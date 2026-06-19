@@ -54,7 +54,7 @@ export default function HeroSection() {
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
             style={{ backgroundImage: `url(${slides[currentSlide].image})` }}
           />
-          <div className="absolute inset-0 bg-black/60" />
+          <div className="absolute inset-0 bg-black/75" />
 
           {/* Content */}
           <div className="absolute inset-0 flex items-center justify-center">
