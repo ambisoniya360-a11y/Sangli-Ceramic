@@ -1,14 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Save, ArrowLeft, Loader2, Upload, Trash2, ArrowUp, ArrowDown } from 'lucide-react'
 import Link from 'next/link'
 
-export default function NewProductPage() {
+export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
+  const { id: productId } = use(params)
   const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(true)
   const [categories, setCategories] = useState<any[]>([])
   const [brands, setBrands] = useState<any[]>([])
   
@@ -24,30 +26,57 @@ export default function NewProductPage() {
     featured: false
   })
 
-  const [images, setImages] = useState<any[]>([]) // array of { url: string, name: string, order: number }
+  const [images, setImages] = useState<any[]>([]) // array of { url: string, name: string, order: number, id?: string }
 
   const supabase = createClient()
 
   useEffect(() => {
-    async function fetchData() {
-      const [{ data: cats }, { data: brds }] = await Promise.all([
-        supabase.from('categories').select('id, name'),
-        supabase.from('brands').select('id, name')
-      ])
-      if (cats) setCategories(cats)
-      if (brds) setBrands(brds)
+    async function loadData() {
+      try {
+        const [{ data: cats }, { data: brds }, { data: prod }, { data: imgs }] = await Promise.all([
+          supabase.from('categories').select('id, name'),
+          supabase.from('brands').select('id, name'),
+          supabase.from('products').select('*').eq('id', productId).single(),
+          supabase.from('product_images').select('*').eq('product_id', productId).order('display_order', { ascending: true })
+        ])
+
+        if (cats) setCategories(cats)
+        if (brds) setBrands(brds)
+        if (prod) {
+          setFormData({
+            name: prod.name,
+            slug: prod.slug,
+            description: prod.description || '',
+            short_description: prod.short_description || '',
+            price: prod.price !== null ? prod.price.toString() : '',
+            category_id: prod.category_id || '',
+            brand_id: prod.brand_id || '',
+            status: prod.status || 'Published',
+            featured: prod.featured || false
+          })
+        }
+        if (imgs) {
+          setImages(imgs.map(img => ({
+            id: img.id,
+            url: img.image_url,
+            name: img.image_name,
+            order: img.display_order
+          })))
+        }
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setFetching(false)
+      }
     }
-    fetchData()
-  }, [])
+    loadData()
+  }, [productId])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
     const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
 
     setFormData(prev => ({ ...prev, [name]: val }))
-    if (name === 'name') {
-      setFormData(prev => ({ ...prev, slug: value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') }))
-    }
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,7 +131,6 @@ export default function NewProductPage() {
     newImages[index] = newImages[newIndex]
     newImages[newIndex] = temp
 
-    // Reset display orders
     setImages(newImages.map((img, idx) => ({ ...img, order: idx })))
   }
 
@@ -110,10 +138,9 @@ export default function NewProductPage() {
     e.preventDefault()
     setLoading(true)
 
-    // Primary image is the first uploaded image, if any
     const primaryImage = images.length > 0 ? images[0].url : null
 
-    // Construct product record payload
+    // Update product record
     const payload = {
       name: formData.name,
       slug: formData.slug,
@@ -124,38 +151,36 @@ export default function NewProductPage() {
       brand_id: formData.brand_id || null,
       status: formData.status,
       featured: formData.featured,
-      image: primaryImage, // Keep main image column synced
+      image: primaryImage,
       updated_at: new Date().toISOString()
     }
 
-    const { data: product, error } = await supabase
+    const { error } = await supabase
       .from('products')
-      .insert([payload])
-      .select()
-      .single()
+      .update(payload)
+      .eq('id', productId)
 
     if (error) {
-      alert(`Error creating product: ${error.message}`)
+      alert(`Error updating product: ${error.message}`)
       setLoading(false)
       return
     }
 
-    // Insert multi-images
+    // Sync product images by deleting old ones and re-inserting
+    await supabase
+      .from('product_images')
+      .delete()
+      .eq('product_id', productId)
+
     if (images.length > 0) {
       const imageRecords = images.map(img => ({
-        product_id: product.id,
+        product_id: productId,
         image_url: img.url,
         image_name: img.name,
         display_order: img.order
       }))
 
-      const { error: imgError } = await supabase
-        .from('product_images')
-        .insert(imageRecords)
-
-      if (imgError) {
-        alert(`Product created, but error inserting images: ${imgError.message}`)
-      }
+      await supabase.from('product_images').insert(imageRecords)
     }
 
     // Log activity
@@ -163,15 +188,23 @@ export default function NewProductPage() {
     if (user) {
       await supabase.from('activity_logs').insert([{
         user_id: user.id,
-        action: `Created Product: ${formData.name}`,
+        action: `Edited Product: ${formData.name}`,
         entity_type: 'product',
-        entity_id: product.id
+        entity_id: productId
       }])
     }
 
     setLoading(false)
     router.push('/admin/products')
     router.refresh()
+  }
+
+  if (fetching) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   return (
@@ -181,8 +214,8 @@ export default function NewProductPage() {
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Add New Product</h1>
-          <p className="text-gray-500 mt-1">Create a new product in the catalog.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Edit Product</h1>
+          <p className="text-gray-500 mt-1">Modify details for this catalog item.</p>
         </div>
       </div>
 
@@ -312,7 +345,7 @@ export default function NewProductPage() {
             className="bg-primary text-primary-foreground px-8 py-3 rounded-xl font-medium hover:bg-primary/90 transition-all flex items-center disabled:opacity-70 shadow-sm"
           >
             {loading ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Save className="w-5 h-5 mr-2" />}
-            Save Product
+            Save Changes
           </button>
         </div>
       </form>

@@ -40,6 +40,21 @@ export async function updateSession(request: NextRequest) {
       url.pathname = '/admin/login'
       return NextResponse.redirect(url)
     }
+
+    // Role-Based Access Control (RBAC): Only Super Admin can access user management
+    if (request.nextUrl.pathname.startsWith('/admin/users')) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile || profile.role !== 'Super Admin') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/admin'
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   // If user is logged in and trying to access login page, redirect to admin dashboard

@@ -13,7 +13,10 @@ import {
   LogOut,
   Menu,
   X,
-  Grid
+  Grid,
+  Folder,
+  Users,
+  History
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -23,7 +26,13 @@ const navigation = [
   { name: 'Categories', href: '/admin/categories', icon: Grid },
   { name: 'Brands', href: '/admin/brands', icon: Tags },
   { name: 'Gallery', href: '/admin/gallery', icon: ImageIcon },
+  { name: 'Hero Banners', href: '/admin/hero', icon: ImageIcon },
+  { name: 'Testimonials', href: '/admin/testimonials', icon: MessageSquare },
   { name: 'Leads', href: '/admin/leads', icon: MessageSquare },
+  { name: 'Files', href: '/admin/files', icon: Folder },
+  { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Activity Logs', href: '/admin/logs', icon: History },
+  { name: 'Settings', href: '/admin/settings', icon: Settings },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
