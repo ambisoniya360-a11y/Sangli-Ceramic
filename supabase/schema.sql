@@ -103,6 +103,6 @@ on conflict (id) do nothing;
 
 -- Storage policies
 create policy "Public Access" on storage.objects for select using (bucket_id in ('products', 'brands', 'gallery', 'categories'));
-create policy "Admin Insert" on storage.objects for insert using (auth.role() = 'authenticated');
+create policy "Admin Insert" on storage.objects for insert with check (auth.role() = 'authenticated');
 create policy "Admin Update" on storage.objects for update using (auth.role() = 'authenticated');
 create policy "Admin Delete" on storage.objects for delete using (auth.role() = 'authenticated');
